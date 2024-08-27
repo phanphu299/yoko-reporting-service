@@ -1,0 +1,13 @@
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/bin/Debug/netstandard2.1/Reporting.Application.deps.json
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/bin/Debug/netstandard2.1/Reporting.Application.dll
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/bin/Debug/netstandard2.1/Reporting.Application.pdb
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/bin/Debug/netstandard2.1/Reporting.Domain.dll
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/bin/Debug/netstandard2.1/Reporting.Domain.pdb
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/obj/Debug/netstandard2.1/Reporting.Application.csproj.AssemblyReference.cache
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/obj/Debug/netstandard2.1/Reporting.Application.GeneratedMSBuildEditorConfig.editorconfig
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/obj/Debug/netstandard2.1/Reporting.Application.AssemblyInfoInputs.cache
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/obj/Debug/netstandard2.1/Reporting.Application.AssemblyInfo.cs
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/obj/Debug/netstandard2.1/Reporting.Application.csproj.CoreCompileInputs.cache
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/obj/Debug/netstandard2.1/Reporting.Application.csproj.CopyComplete
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/obj/Debug/netstandard2.1/Reporting.Application.dll
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/obj/Debug/netstandard2.1/Reporting.Application.pdb

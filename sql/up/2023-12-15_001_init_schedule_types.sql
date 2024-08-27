@@ -1,0 +1,9 @@
+CREATE TABLE schedule_types (
+  id VARCHAR(50) NOT NULL,
+  name NVARCHAR(255) NOT NULL,
+  created_utc DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+  updated_utc DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+  deleted BIT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_schedule_types PRIMARY KEY(id)
+);
+GO

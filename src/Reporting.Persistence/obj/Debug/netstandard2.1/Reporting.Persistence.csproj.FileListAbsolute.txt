@@ -1,0 +1,15 @@
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/bin/Debug/netstandard2.1/Reporting.Persistence.deps.json
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/bin/Debug/netstandard2.1/Reporting.Persistence.dll
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/bin/Debug/netstandard2.1/Reporting.Persistence.pdb
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/bin/Debug/netstandard2.1/Reporting.Application.dll
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/bin/Debug/netstandard2.1/Reporting.Domain.dll
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/bin/Debug/netstandard2.1/Reporting.Domain.pdb
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/bin/Debug/netstandard2.1/Reporting.Application.pdb
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/obj/Debug/netstandard2.1/Reporting.Persistence.csproj.AssemblyReference.cache
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/obj/Debug/netstandard2.1/Reporting.Persistence.GeneratedMSBuildEditorConfig.editorconfig
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/obj/Debug/netstandard2.1/Reporting.Persistence.AssemblyInfoInputs.cache
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/obj/Debug/netstandard2.1/Reporting.Persistence.AssemblyInfo.cs
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/obj/Debug/netstandard2.1/Reporting.Persistence.csproj.CoreCompileInputs.cache
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/obj/Debug/netstandard2.1/Reporting.Persistence.csproj.CopyComplete
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/obj/Debug/netstandard2.1/Reporting.Persistence.dll
+/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Persistence/obj/Debug/netstandard2.1/Reporting.Persistence.pdb

@@ -1,0 +1,1 @@
+alter table reports add output_type_id varchar(255) null

@@ -1,0 +1,26 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+    "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=ydxdev01sea01sa;AccountKey=OMPxMBmQKY5fJNVRFcof6SJLrAea20lDsnpSEkUtCvsFqyMsLAFtt8jmU2nRJhIcv7kJScEwiiwziuW/FSxayg==;EndpointSuffix=core.windows.net",
+    "ConnectionStrings__Default": "Server=tcp:10.15.11.231,1433;Initial Catalog=reporting_{{projectId}};Persist Security Info=False;User ID=ahs-sql-admin;Password=9FjmkeUChetVhBzSWF2zXGZjdtksDpDtcScw;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;",
+    "NotificationHubEndpoint": "http://notification-hub",
+    "Authentication__Authority": "https://ahs-test01-idp-sea-wa.azurewebsites.net",
+    "Authentication__Issuer": "idp",
+    "Authentication__ClientId": "C35D91EF-8184-4817-B50E-999C4149DEF4",
+    "Authentication__ClientSecret": "F9aDTtWk89PQzac8fce5WepTDzHETSTV2xLCAxMs",
+    "RabbitMQ": "amqp://rabbitmq:Pass1234!@127.0.0.1:5672",
+    "APPINSIGHTS_INSTRUMENTATIONKEY": "44a96f99-1e40-4cfa-b6b2-92b368f5f01c",
+    "AzureServiceBus__Host": "127.0.0.1",
+    "AzureServiceBus__KeyName": "rabbitmq",
+    "AzureServiceBus__SharedAccessKey": "Pass1234!",
+    "Redis__Host": "127.0.0.1",
+    "Redis__Password": "Pass1234!",
+    "Redis__Database": "1",
+    "Redis__Ssl": "false",
+    "Api__Storage": "http://127.0.0.1:12000",
+    "Function__Master": "https://ahs-test01-ppm-be-sea-wa.azurewebsites.net",
+    "PublicApi__Storage": "http://127.0.0.1:12000",
+    "EndPoint__CDN": "https://ahsstaticcontent01sa.blob.core.windows.net"
+  }
+}

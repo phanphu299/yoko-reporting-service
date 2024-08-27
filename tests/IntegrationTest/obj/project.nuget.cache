@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "dgSpecHash": "b7u2N51eZmc=",
+  "success": false,
+  "projectFilePath": "/Users/phuphan/Yokogawa/Asset Tenant/reporting-service/tests/IntegrationTest/IntegrationTest.csproj",
+  "expectedPackageFiles": [
+    "/Users/phuphan/.nuget/packages/microsoft.netcore.app.ref/6.0.33/microsoft.netcore.app.ref.6.0.33.nupkg.sha512",
+    "/Users/phuphan/.nuget/packages/microsoft.aspnetcore.app.ref/6.0.33/microsoft.aspnetcore.app.ref.6.0.33.nupkg.sha512",
+    "/Users/phuphan/.nuget/packages/microsoft.netcore.app.host.osx-arm64/6.0.33/microsoft.netcore.app.host.osx-arm64.6.0.33.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1301",
+      "level": "Error",
+      "message": "Failed to retrieve information about 'AHI.Infrastructure.Service.Tag.SqlServer' from remote source 'https://pkgs.dev.azure.com/AssetHealthInsights/_packaging/79ae7bbd-f600-4ab5-a5f9-fd5798c28b30/nuget/v3/flat2/ahi.infrastructure.service.tag.sqlserver/index.json'.",
+      "libraryId": "AHI.Infrastructure.Service.Tag.SqlServer"
+    }
+  ]
+}

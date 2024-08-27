@@ -1,0 +1,5 @@
+is_global = true
+build_property.RootNamespace = Reporting.Application
+build_property.ProjectDir = /Users/phuphan/Yokogawa/Asset Tenant/reporting-service/src/Reporting.Application/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 

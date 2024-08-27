@@ -1,0 +1,1 @@
+update schema_details set is_required = 0 where [key] = 'headers' and schema_id = (select id from schemas where type = 'API_DATA_SOURCE');

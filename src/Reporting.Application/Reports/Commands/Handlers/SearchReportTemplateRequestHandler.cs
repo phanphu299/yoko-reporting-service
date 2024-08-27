@@ -1,0 +1,35 @@
+using AHI.Infrastructure.SharedKernel.Model;
+using MediatR;
+using Reporting.Application.Command;
+using Reporting.Application.Command.Model;
+using Reporting.Application.Constant;
+using Reporting.Application.Service.Abstraction;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Template.Application.Command.Handler
+{
+    public class SearchReportTemplateRequestHandler : IRequestHandler<SearchReportTemplate, BaseSearchResponse<ReportTemplateDto>>
+    {
+        private readonly IReportTemplateService _service;
+        private readonly ISystemContext _systemContext;
+
+        public SearchReportTemplateRequestHandler(ISystemContext systemContext, IReportTemplateService service)
+        {
+            _systemContext = systemContext;
+            _service = service;
+        }
+
+        public async Task<BaseSearchResponse<ReportTemplateDto>> Handle(SearchReportTemplate request, CancellationToken cancellationToken)
+        {
+            if (request.ClientOverride == false)
+            {
+                var pageSize = await _systemContext.GetValueAsync(DefaultSearch.DEFAULT_SEARCH_PAGE_SIZE, DefaultSearch.DEFAULT_VALUE_PAGE_SIZE);
+                request.PageSize = Convert.ToInt32(pageSize);
+            }
+
+            return await _service.SearchAsync(request);
+        }
+    }
+}

@@ -1,0 +1,18 @@
+version: "3"
+services:
+  reporting-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+  reporting-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile-worker      
+  reporting-migration:
+    build:
+      context: .
+      dockerfile: Dockerfile-migration
+  reporting-function:
+    build:
+      context: .
+      dockerfile: Dockerfile-function

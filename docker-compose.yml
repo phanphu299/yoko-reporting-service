@@ -1,0 +1,1090 @@
+version: "3"
+services:
+  db:
+    image: "mcr.microsoft.com/mssql/server:2019-CU16-ubuntu-20.04"
+    ports:
+      - "1433:1433"
+    environment:
+      SA_PASSWORD: "Pass1234!"
+      ACCEPT_EULA: "Y"
+      MSSQL_DB: Reporting
+    networks:
+      - reporting
+
+  postgresdb:
+    image: "dxpprivate.azurecr.io/timescaledb-ha:latest"
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: "Pass1234!"
+    networks:
+      - reporting
+
+  storage:
+    image: "mcr.microsoft.com/azure-storage/azurite"
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+    networks:
+      - reporting
+
+  rabbitmq:
+    image: "rabbitmq:3.10.2-management"
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: "rabbitmq"
+      RABBITMQ_DEFAULT_PASS: "Pass1234!"
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./rabbitmq/rabbitmq-definitions.json:/etc/rabbitmq/definitions.json
+    networks:
+      - reporting
+
+  redis:
+    image: redis:6.2.6-alpine
+    command: redis-server --requirepass Pass1234!
+    deploy:
+      replicas: 1
+    restart: on-failure
+    ports:
+      - "6379:6379"
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+
+  idp:
+    image: dxpprivate.azurecr.io/identity-service:0.1.357-dev-develop.61
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 100M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      ConnectionStrings__Default: "Server=db;Database=Identity;User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      Api__Storage: "http://storage-service"
+      Api__Broker: "http://broker-service"
+      Api__Configuration: "http://configuration-service"
+      Api__Tenant: "http://tenant-service"
+      Api__AccessControl: "http://access-control-service"
+      Api__Master: "http://master-service"
+      Function__Master: "http://master-function"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "8081:80"
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  idp-migration:
+    image: dxpprivate.azurecr.io/identity-service:migration-0.1.398-dev-develop.76
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  storage-service:
+    image: dxpprivate.azurecr.io/storage-service:0.1.30-internal-develop.5
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      FileDirectory: "/var/storage/files"
+      BlobDirectory: "/var/storage/blobs"
+      Authentication__Authority: "http://idp"
+      StorageAccount__ConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://storage:10000/devstoreaccount1;QueueEndpoint=http://storage:10001/devstoreaccount1;"
+      StorageAccount__ImageQueueName: "devstoreaccount1/images" # need to input the storage account name into the queue, only for Azurite
+      Authentication__Issuer: "idp"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+      Function__Storage: "http://storage-function"
+      DefaultHost: "http://storage-service"
+    ports:
+      - "12000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+      - redis
+    networks:
+      - reporting
+
+  storage-function:
+    image: dxpprivate.azurecr.io/storage-function:0.1.24-dev-develop.13
+    deploy:
+      replicas: 1
+    restart: on-failure
+    environment:
+      FileDirectory: "/var/storage/files"
+      BlobDirectory: "/var/storage/blobs"
+      Api__PdfConvert: "http://pdf-service"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      FUNCTIONS_WORKER_RUNTIME: "dotnet"
+      AzureWebJobsStorage: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;"
+      Authentication__Authority: "http://127.0.0.1:8081"
+      RabbitMQ: "amqp://rabbitmq:Pass1234!@127.0.0.1:5672"
+      BlobStorage__Azure__DefaultEndpointsProtocol: "https"
+      BlobStorage__Azure__AccountName: "devstoreaccount1"
+      BlobStorage__Azure__AccountKey: "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
+      BlobStorage__Azure__DefaultContainer: "files"
+      BlobStorage__Azure__CDN__DefaultEndpointsProtocol: "https"
+      BlobStorage__Azure__CDN__AccountName: "devstoreaccount1"
+      BlobStorage__Azure__CDN__AccountKey: "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
+      BlobStorage__Azure__CDN__DefaultContainer: "static-dev"
+    # volumes:
+    #   - ./temp/storage/files:/var/storage/files
+    #   - ./temp/storage/blobs:/var/storage/blobs
+    ports:
+      - "7079:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+
+  master-service:
+    image: dxpprivate.azurecr.io/master-service:0.1.242-dev-develop.33
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      ConnectionStrings__Default: "Server=db;Database=tenant;User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      Api__Configuration: "http://configuration-service"
+      Api__Storage: "http://storage-service"
+      Api__Broker: "http://broker-service"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "17000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+      - redis
+    networks:
+      - reporting
+
+  master-migration:
+    image: dxpprivate.azurecr.io/master-service:migration-0.1.242-dev-develop.33
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  master-function:
+    image: dxpprivate.azurecr.io/master-function:0.1.242-dev-develop.33
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      AzureWebJobsStorage: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://storage:10000/devstoreaccount1;QueueEndpoint=http://storage:10001/devstoreaccount1;"
+      FUNCTIONS_WORKER_RUNTIME: "dotnet"
+      ConnectionStrings__Default: "Server=db;Database=tenant;User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      NotificationHubEndpoint: "http://notification-hub"
+      RabbitMQ: "amqp://rabbitmq:Pass1234!@rabbitmq:5672"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      Api__Storage: "http://storage-service"
+      Api__Broker: "http://broker-service"
+      Api__Configuration: "http://configuration-service"
+      AuthorizationCode: "localhost"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "7073:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+      - redis
+    networks:
+      - reporting
+
+  tenant-service:
+    image: dxpprivate.azurecr.io/tenant-service:0.1.19-dev-develop.34
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    ports:
+      - "15000:80"
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      ConnectionStrings__Default: "Server=db;Database=tenant_{{tenantId}};User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      Api__Configuration: "http://configuration-service"
+      Api__Storage: "http://storage-service"
+      Api__Broker: "http://broker-service"
+      Api__Master: "http://master-service"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  tenant-migration:
+    image: dxpprivate.azurecr.io/tenant-service:migration-0.1.19-dev-develop.34
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  user-service:
+    image: dxpprivate.azurecr.io/user-service:0.1.46-internal-develop.18
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      StorageAccount__ConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://storage:10000/devstoreaccount1;QueueEndpoint=http://storage:10001/devstoreaccount1;"
+      StorageAccount__ImageQueueName: "devstoreaccount1/images" # need to input the storage account name into the queue, only for Azurite
+      Authentication__Issuer: "idp"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__Default: "Server=db;Database=user_{{subscriptionId}};User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      Api__Configuration: "http://configuration-service"
+      Api__Storage: "http://storage-service"
+      Api__User: "http://user-service"
+      Api__AccessControl: "http://access-control-service"
+      Api__Tenant: "http://tenant-service"
+      Api__Master: "http://master-service"
+      Function__User: "http://user-function"
+      Function__Master: "http://master-function"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+      AppData: "/var/data"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "16000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+
+  user-migration:
+    image: dxpprivate.azurecr.io/user-service:migration-0.1.46-internal-develop.18
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  user-function:
+    image: dxpprivate.azurecr.io/user-function:0.1.46-dev-develop.14
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.5"
+      #     memory: 200M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ConnectionStrings__Default: "Server=db;Database=user_{{subscriptionId}};User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureWebJobsStorage: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://storage:10000/devstoreaccount1;QueueEndpoint=http://storage:10001/devstoreaccount1;"
+      FUNCTIONS_WORKER_RUNTIME: "dotnet"
+      NotificationHubEndpoint: "http://notification-hub"
+      RabbitMQ: "amqp://rabbitmq:Pass1234!@rabbitmq:5672"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      Api__Configuration: "http://configuration-service"
+      Api__Storage: "http://storage-service"
+      Api__User: "http://user-service"
+      Api__AccessControl: "http://access-control-service"
+      Api__Tenant: "http://tenant-service"
+      Api__Master: "http://master-service"
+      Api__Localization: "http://localization-service"
+      Api__Bookmark: "http://bookmark-service"
+      Function__Master: "http://master-function"
+      AppData: "/var/data"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      AzureFunctionsJobHost__logging__LogLevel__Default: "Trace"
+      AzureFunctionsJobHost__logging__LogLevel_IdentityServer4: "Trace"
+      AzureFunctionsJobHost__logging__LogLevel__Microsoft: "Trace"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "7075:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+      - redis
+      - storage-service
+    networks:
+      - reporting
+
+  access-control-service:
+    image: dxpprivate.azurecr.io/access-control-service:0.1.39-internal-develop.11
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ConnectionStrings__Default: "Server=db;Database=accesscontrol_{{subscriptionId}};User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      Api__Configuration: "http://configuration-service"
+      Api__Tenant: "http://tenant-service"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "19000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+      - redis
+    networks:
+      - reporting
+
+  access-control-migration:
+    image: dxpprivate.azurecr.io/access-control-service:migration-0.1.425-dev-develop.35
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  configuration-service:
+    image: dxpprivate.azurecr.io/configuration-service:0.1.43-dev-develop.6
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      ConnectionStrings__Default: "Server=db;Database=configuration_{{projectId}};User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      Api__Configuration: "http://configuration-service"
+      Api__User: "http://user-service"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "13000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+      - redis
+    networks:
+      - reporting
+
+  configuration-migration:
+    image: dxpprivate.azurecr.io/configuration-service:migration-0.1.43-dev-develop.6
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  device-service:
+    image: dxpprivate.azurecr.io/device-service:0.1.1428-dev-develop.183
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ConnectionStrings__Default: "User ID=postgres;Password=Pass1234!;Server=postgresdb;Port=5432;Database=device_{{projectId}};Pooling=true"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      Api__Configuration: "http://configuration-service"
+      Api__Tenant: "http://tenant-service"
+      Api__User: "http://user-service"
+      Api__Broker: "http://broker-service"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "21000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+      - redis
+      - postgresdb
+      - device-migration
+    networks:
+      - reporting
+
+  device-migration:
+    image: dxpprivate.azurecr.io/device-service:migration-0.1.1428-dev-develop.183
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+      - postgresdb
+    networks:
+      - reporting
+
+  scheduler-service:
+    image: dxpprivate.azurecr.io/scheduler-service:0.1.18-internal-develop.10
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 200M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      ConnectionStrings__Default: "User ID=postgres;Password=Pass1234!;Host=postgresdb;Port=5432;Database=scheduler;Pooling=true"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      PublicApi__Reporting: "http://reporting-service"
+      Api__Configuration: "http://configuration-service"
+      Function__User: "http://user-function"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+      Quartz__quartz.scheduler.instanceName: "scheduler_instance"
+    ports:
+      - "23000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+
+  scheduler-migration:
+    image: dxpprivate.azurecr.io/scheduler-service:migration-0.1.18-internal-develop.6
+    deploy:
+      replicas: 1
+    restart: on-failure
+    networks:
+      - reporting
+
+  project-service:
+    image: dxpprivate.azurecr.io/project-service:0.1.15-dev-develop.32
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      StorageAccount__ConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://storage:10000/devstoreaccount1;QueueEndpoint=http://storage:10001/devstoreaccount1;"
+      Authentication__Issuer: "idp"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__Default: "Server=db;Database=project_{{subscriptionId}};User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      Api__Tenant: "http://tenant-service"
+      Api__Configuration: "http://configuration-service"
+      Api__User: "http://user-service"
+      Api__Broker: "http://broker-service"
+      Api__AccessControl: "http://access-control-service"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+      AppData: "/var/data"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      Function__Master: "http://master-function"
+      Function__User: "http://user-function"
+    ports:
+      - "18000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+
+  project-migration:
+    image: dxpprivate.azurecr.io/project-service:migration-0.1.15-dev-develop.32
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+
+  localization-service:
+    image: dxpprivate.azurecr.io/localization-service:0.1.8-dev-develop.6
+    deploy:
+      replicas: 1
+    restart: on-failure
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      ConnectionStrings__Default: "Server=db;Database=localization;User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      Api__Master: "http://master-service"
+      Function__Master: "http://master-function"
+      Function__User: "http://user-function"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      Api__Storage: "http://storage-service"
+      Api__Broker: "http://broker-service"
+      Api__Configuration: "http://configuration-service"
+      Api__Tenant: "http://tenant-service"
+      Api__AccessControl: "http://access-control-service"
+      Api__Notification: "http://notification-service"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "30000:80"
+    depends_on:
+      - idp
+      - db
+      - storage
+    networks:
+      - reporting
+
+  localization-migration:
+    image: dxpprivate.azurecr.io/localization-service:migration-0.1.8-dev-develop.6
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+    networks:
+      - reporting
+
+  reporting-service:
+    image: dxpprivate.azurecr.io/reporting-service-vnext:latest
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 200M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      ConnectionStrings__Default: "Server=db;Database=reporting_{{projectId}};User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      PublicApi__Storage: "http://storage-service"
+      PublicApi__Reporting: "http://reporting-worker"
+      NotificationHubEndpoint: "http://notification-hub"
+      Api__Device: "http://device-service"
+      Api__Scheduler: "http://scheduler-service"
+      Api__Configuration: "http://configuration-service"
+      Api__Project: "http://project-service"
+      Api__Tenant: "http://tenant-service"
+      Api__User: "http://user-service"
+      Api__Tag: "http://tag-service"
+      Function__User: "http://user-function"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+      Endpoint__CDN: "https://ahsstaticcontent01sa.blob.core.windows.net"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+      MaxPeriod: 3
+      CollectReport__MaxRetryTime: 3
+      CollectReport__RetryInterval: 5
+    ports:
+      - "11000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+
+  tag-service:
+    image: dxpprivate.azurecr.io/tag-service:0.1.1-dev-develop.45
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.5"
+      #     memory: 200M
+    restart: on-failure
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Authentication__Authority: "http://idp"
+      Authentication__IntrospectionEndpoint: "http://idp/connect/introspect"
+      StorageAccount__ConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://storage:10000/devstoreaccount1;QueueEndpoint=http://storage:10001/devstoreaccount1;"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ConnectionStrings__Default: "User ID=postgres;Password=Pass1234!;Host=postgresdb;Port=5432;Database=tag;Pooling=true"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      Api__Configuration: "http://configuration-service"
+      Api__Broker: "http://broker-service"
+      Api__Storage: "http://storage-service"
+      Api__User: "http://user-service"
+      Api__Scheduler: "http://scheduler-service"
+      Api__Master: "http://master-service"
+      Api__Event: "http://event-service"
+      Api__Tenant: "http://tenant-service"
+      Api__Device: "http://device-service"
+      Api__Entity: "http://entity-service"
+      Api__Dashboard: "http://dashboard-service"
+      Api__Alarm: "http://alarm-service"
+      Api__Notification: "http://notification-service"
+      Api__Project: "http://project-service"
+      Api__Validation: "http://validation-service"
+      Api__Bookmark: "http://bookmark-service"
+      Api__Localization: "http://localization-service"
+      Api__Reporting: "http://reporting-service-vnext"
+      Api__AssetMedia: "http://asset-media-service"
+      Api__AssetTable: "http://asset-table-service"
+      Api__Tag: "http://tag-service"
+      Api__ExecutionJob: "http://function-block-job"
+      Api__FunctionBlock: "http://function-block-service"
+      Function__Device: "http://device-function"
+      Function__Broker: "http://broker-function"
+      Function__User: "http://user-function"
+      Function__Block: "http://function-block-function"
+      Function__AssetTable: "http://asset-table-function"
+      Function__AssetMedia: "http://asset-media-function"
+      Function__Tenant: "http://tenant-function"
+      Function__Configuration: "http://configuration-function"
+      Function__Alarm: "http://alarm-function"
+      Function__Notification: "http://notification-function"
+      Function__AccessControl: "http://access-control-function"
+      Function__Project: "http://project-function"
+      Function__Storage: "http://storage-function"
+      Function__Identity: "http://identity-function"
+      Function__Bookmark: "http://bookmark-function"
+      Job__Alarm: "http://alarm-job"
+      Job__Device: "http://device-job"
+      NotificationHubEndpoint: "http://notification-hub"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+    ports:
+      - "24001:80"
+    depends_on:
+      - db
+      - rabbitmq
+      - idp
+      - master-service
+      - master-function
+      - user-service
+      - user-function
+      - postgresdb
+    networks:
+      - reporting
+
+  tag-migration:
+    image: dxpprivate.azurecr.io/tag-service:migration-0.1.1-dev-develop.45
+    deploy:
+      replicas: 1
+    restart: on-failure
+    depends_on:
+      - db
+      - rabbitmq
+      - postgresdb
+    networks:
+      - reporting
+
+  reporting-worker:
+    image: dxpprivate.azurecr.io/reporting-worker:latest
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 200M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      PublicApi__Storage: "http://storage-service"
+      PublicApi__NotificationHubEndpoint: "http://notification-hub"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "14000:80"
+    depends_on:
+      - storage
+      - idp
+    networks:
+      - reporting
+
+  reporting-migration:
+    image: dxpprivate.azurecr.io/reporting-service-vnext:migration-latest
+    deploy:
+      replicas: 1
+    restart: on-failure
+    networks:
+      - reporting
+
+  reporting-function:
+    image: dxpprivate.azurecr.io/reporting-function:latest
+    deploy:
+      replicas: 1
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      AzureWebJobsStorage: "DefaultEndpointsProtocol=https;AccountName=ydxdev01sea01sa;AccountKey=OMPxMBmQKY5fJNVRFcof6SJLrAea20lDsnpSEkUtCvsFqyMsLAFtt8jmU2nRJhIcv7kJScEwiiwziuW/FSxayg==;EndpointSuffix=core.windows.net"
+      FUNCTIONS_WORKER_RUNTIME: "dotnet"
+      ConnectionStrings__Default: "Server=127.0.0.1;Database=reporting_5b659b58857240c585681c26afe22b42;User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      RabbitMQ: "amqp://rabbitmq:Pass1234!@rabbitmq:5672"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      NotificationHubEndpoint: "http://notification-hub"
+      DataFolder: "/var/device/data"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      Api__Storage: "http://storage-service"
+      Endpoint__CDN: "https://ahsstaticcontent01sa.blob.core.windows.net"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    volumes:
+      - ./temp:/var/device/data
+    ports:
+      - "7072:80"
+    depends_on:
+      - db
+      - rabbitmq
+      - storage
+      - idp
+      - redis
+      - storage-service
+    networks:
+      - reporting
+  notification-hub:
+    image: dxpprivate.azurecr.io/notification-hub:0.1.114-dev-develop.10
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.5"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      AzureWebJobsStorage: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://storage:10000/devstoreaccount1;QueueEndpoint=http://storage:10001/devstoreaccount1;"
+      FUNCTIONS_WORKER_RUNTIME: "dotnet"
+      ConnectionStrings__Device: "User ID=postgres;Password=Pass1234!;Host=postgresdb;Port=5432;Database=device;Pooling=true;"
+      ConnectionStrings__Default: "User ID=postgres;Password=Pass1234!;Host=postgresdb;Port=5432;Database=device_34e5ee62429c4724b3d03891bd0a08c9;Pooling=true;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      RabbitMQ: "amqp://rabbitmq:Pass1234!@rabbitmq:5672"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      DataFolder: "/var/device/data"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      Api__Storage: "http://storage-service"
+      Api__Configuration: "http://configuration-service"
+      Api__Broker: "http://broker-service"
+      Api__User: "http://user-service"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    volumes:
+      - ./temp:/var/device/data
+    ports:
+      - "21001:80"
+    depends_on:
+      - db
+      - rabbitmq
+      - storage
+      - idp
+      - redis
+      - storage-service
+    networks:
+      - reporting
+  bookmark-service:
+    image: dxpprivate.azurecr.io/bookmark-service:0.1.2-dev-develop.8
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    environment:
+      Authentication__Authority: "http://idp"
+      Authentication__Issuer: "idp"
+      Authentication__ClientId: "D28710F2-F142-4CBD-A4E9-9D0A09B9ECF5"
+      Authentication__ClientSecret: "D34BtxpaKSkfcKYCvxLbgKTdV8FUfRTHGPrKLawL"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Redis__Host: "redis"
+      Redis__Ssl: "false"
+      Redis__Password: "Pass1234!"
+      Redis__Database: "1"
+      ConnectionStrings__Default: "Server=db;Database=bookmark;User=sa;Password=Pass1234!;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+      AzureServiceBus__Host: "rabbitmq"
+      AzureServiceBus__KeyName: "rabbitmq"
+      AzureServiceBus__SharedAccessKey: "Pass1234!"
+      AzureServiceBus__Ssl: "false"
+      APPINSIGHTS_INSTRUMENTATIONKEY: "44a96f99-1e40-4cfa-b6b2-92b368f5f01c"
+      Api__Configuration: "http://configuration-service"
+      Api__Storage: "http://storage-service"
+      Api__User: "http://user-service"
+      Api__Dashboard: "http://dashboard-service"
+      Api__Device: "http://device-service"
+      Function__User: "http://user-function"
+      Logging__LogLevel__Default: Trace
+      Logging__LogLevel__IdentityServer4: Trace
+      Logging__LogLevel__Microsoft: Trace
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      ServerEndpoint: "db"
+    ports:
+      - "24000:80"
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+  bookmark-migration:
+    image: dxpprivate.azurecr.io/bookmark-service:migration-0.1.2-dev-develop.8
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits:
+      #     cpus: "0.1"
+      #     memory: 50M
+    restart: on-failure
+    depends_on:
+      - db
+      - storage
+      - idp
+    networks:
+      - reporting
+networks:
+  reporting:
